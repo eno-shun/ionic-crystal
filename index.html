@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>イオン結晶3Dビューア</title>
+<style>
+:root{
+  --plus:#1e5bb8;
+  --minus:#157a3b;
+  --line:#d8dee9;
+  --bg:#f5f7fb;
+  --panel:#ffffff;
+  --ink:#1f2937;
+  --muted:#64748b;
+  --accent:#315aa8;
+  --bond:#6b7280;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Yu Gothic",sans-serif;
+}
+header{
+  padding:12px 18px;
+  background:#fff;
+  border-bottom:1px solid var(--line);
+}
+h1{margin:0;font-size:22px;font-weight:900}
+.sub{margin:2px 0 0;color:var(--muted);font-size:13px}
+main{
+  height:calc(100vh - 64px);
+  min-height:690px;
+  display:grid;
+  grid-template-columns:300px 1fr 320px;
+  gap:12px;
+  padding:12px;
+}
+section{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:18px;
+  box-shadow:0 8px 22px rgba(15,23,42,.07);
+  padding:13px;
+  overflow:auto;
+}
+.viewer{
+  position:relative;
+  padding:0;
+  overflow:hidden;
+  background:radial-gradient(circle at center,#ffffff 0%,#eef4ff 100%);
+}
+canvas{
+  width:100%;
+  height:100%;
+  display:block;
+  cursor:grab;
+}
+canvas:active{cursor:grabbing}
+h2{font-size:17px;margin:0 0 10px;font-weight:900}
+h3{font-size:14px;margin:14px 0 7px;color:#334155}
+button,input{font:inherit}
+button{
+  border:1px solid #b8c1d1;
+  background:#fff;
+  border-radius:12px;
+  padding:9px 10px;
+  cursor:pointer;
+  font-weight:800;
+  user-select:none;
+}
+button:hover{background:#e8f0ff}
+button.active{
+  background:var(--accent);
+  color:white;
+  border-color:var(--accent);
+}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.struct-btn{
+  text-align:left;
+  min-height:66px;
+  padding:10px;
+}
+.struct-btn strong{display:block;font-size:14px}
+.struct-btn span{display:block;font-size:12px;color:var(--muted);line-height:1.35;margin-top:2px}
+.struct-btn.active span{color:#eaf1ff}
+.control{display:grid;gap:6px;margin:10px 0}
+label{font-size:13px;font-weight:800;color:#334155}
+input[type=range]{width:100%}
+.check{display:flex;gap:8px;align-items:center;padding:7px 0;font-size:13px;font-weight:800}
+.note,.card{
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px;
+  background:#fff;
+  font-size:13px;
+  line-height:1.6;
+}
+.note{background:#f8fbff;border-color:#d6e2f7}
+.warn{background:#fff7df;border-color:#efd685}
+.overlay{
+  position:absolute;
+  top:12px;
+  left:12px;
+  right:12px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  pointer-events:none;
+}
+.pill{
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.82);
+  backdrop-filter:blur(5px);
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:12px;
+  font-weight:900;
+}
+.plusP{color:var(--plus)}
+.minusP{color:var(--minus)}
+.bottomHint{
+  position:absolute;
+  left:12px;
+  right:12px;
+  bottom:12px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.88);
+  backdrop-filter:blur(5px);
+  border-radius:14px;
+  padding:10px 12px;
+  font-size:13px;
+  line-height:1.55;
+  color:#334155;
+  pointer-events:none;
+}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.legendItem{
+  display:flex;gap:8px;align-items:center;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:9px;
+  font-weight:900;
+  font-size:13px;
+}
+.dot{
+  width:22px;height:22px;border-radius:50%;
+  border:2px solid rgba(0,0,0,.12);
+  box-shadow:inset -5px -6px 10px rgba(0,0,0,.24);
+}
+.dot.plus{background:var(--plus)}
+.dot.minus{background:var(--minus)}
+.small{font-size:12px;color:var(--muted);line-height:1.45}
+.keys{
+  display:grid;
+  grid-template-columns:repeat(3,48px);
+  gap:6px;
+  justify-content:center;
+  margin:8px 0;
+}
+.key{
+  height:42px;
+  padding:0;
+  touch-action:none;
+}
+.key.pressed{
+  background:#315aa8;
+  color:#fff;
+  border-color:#315aa8;
+}
+.stat{width:100%;border-collapse:collapse;font-size:12px}
+.stat th,.stat td{border-bottom:1px solid var(--line);padding:7px 4px;text-align:left;vertical-align:top}
+.stat th{width:88px;color:#475569}
+@media(max-width:1100px){
+  main{grid-template-columns:1fr;height:auto}
+  .viewer{height:680px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>イオン結晶3Dビューア</h1>
+  <p class="sub">立方体表示と結晶内部を切り替えて観察できます。ドラッグで回転，ホイールで拡大・縮小できます。内部では見ている向きに進めます。</p>
+</header>
+
+<main>
+<section>
+  <h2>構造</h2>
+  <div class="grid2" id="structureButtons"></div>
+
+  <h3>表示モード</h3>
+  <div class="grid2">
+    <button id="cubeMode" class="active">立方体表示</button>
+    <button id="insideMode">結晶内部</button>
+  </div>
+
+  <div class="control">
+    <label>ズーム・視野：<span id="zoomText">100%</span></label>
+    <input id="zoomRange" type="range" min="60" max="180" step="5" value="100">
+  </div>
+
+  <h3>表示</h3>
+  <label class="check"><input id="showBonds" type="checkbox" checked> 正負のイオン間の補助線</label>
+  <label class="check"><input id="showBox" type="checkbox" checked> 立方体の枠</label>
+  <label class="check"><input id="showLabels" type="checkbox" checked> イオン名</label>
+  <label class="check"><input id="fadeFar" type="checkbox" checked> 遠くを薄く表示</label>
+
+  <h3>視点</h3>
+  <button id="resetView" style="width:100%;">見やすい場所に戻す</button>
+  <button id="autoForward" style="width:100%;margin-top:8px;">結晶内部を自動で進む</button>
+
+  <div class="control" id="autoSpeedControl">
+    <label>自動移動の速さ：<span id="speedText">ゆっくり</span></label>
+    <input id="speedRange" type="range" min="1" max="5" step="1" value="2">
+  </div>
+
+  <h3>結晶内部での移動</h3>
+  <div class="keys">
+    <span></span><button class="key" data-move="forward">↑</button><span></span>
+    <button class="key" data-move="left">←</button><button class="key" data-move="back">↓</button><button class="key" data-move="right">→</button>
+  </div>
+  <div class="small">ボタンを押している間，その方向へ進みます。前進・後退は見ている向きに進みます。</div>
+</section>
+
+<section class="viewer">
+  <canvas id="canvas"></canvas>
+  <div class="overlay">
+    <span class="pill plusP" id="cationPill"></span>
+    <span class="pill minusP" id="anionPill"></span>
+    <span class="pill" id="modePill">立方体表示</span>
+    <span class="pill" id="bondPill">補助線OFF</span>
+  </div>
+  <div class="bottomHint" id="hint"></div>
+</section>
+
+<section>
+  <h2>見方</h2>
+  <div class="legend">
+    <div class="legendItem"><span class="dot plus"></span>陽イオン</div>
+    <div class="legendItem"><span class="dot minus"></span>陰イオン</div>
+  </div>
+
+  <div class="card" id="info"></div>
+
+  <div class="note warn" style="margin-top:10px;">
+    <strong>補助線について</strong><br>
+    線は共有結合を表すものではありません。近くにある陽イオンと陰イオンの間にはたらく引力を見やすくするための補助線です。奥行方向のつながりも表示します。
+  </div>
+
+  <h3>操作</h3>
+  <div class="note">
+    立方体表示：ドラッグで回転，ホイールで拡大・縮小。<br>
+    結晶内部：ドラッグで視線変更，WASD・矢印キー・移動ボタンで移動。前進は見ている方向に進みます。上を向けば上方向へ進みます。前進は見ている方向に進みます。上を向けば上方向へ進みます。
+  </div>
+
+  <h3>現在の表示</h3>
+  <table class="stat">
+    <tr><th>構造型</th><td id="statType"></td></tr>
+    <tr><th>代表例</th><td id="statExample"></td></tr>
+    <tr><th>組成式</th><td id="statFormula"></td></tr>
+    <tr><th>表示数</th><td id="statCount"></td></tr>
+  </table>
+</section>
+</main>
+
+<script>
+const PLUS = "#1e5bb8";
+const MINUS = "#157a3b";
+const BOND = "rgba(40,50,70,.55)";
+
+function corners(t){
+  const arr=[];
+  for(const x of [0,1]) for(const y of [0,1]) for(const z of [0,1]) arr.push([t,x,y,z]);
+  return arr;
+}
+function faceCenters(t){
+  return [
+    [t,.5,.5,0],[t,.5,.5,1],
+    [t,.5,0,.5],[t,.5,1,.5],
+    [t,0,.5,.5],[t,1,.5,.5]
+  ];
+}
+function edgeCenters(t){
+  const arr=[];
+  for(const x of [0,1]) for(const y of [0,1]) arr.push([t,x,y,.5]);
+  for(const x of [0,1]) for(const z of [0,1]) arr.push([t,x,.5,z]);
+  for(const y of [0,1]) for(const z of [0,1]) arr.push([t,.5,y,z]);
+  return arr;
+}
+
+const fccBasis = [
+  ["A",0,0,0],["A",0,.5,.5],["A",.5,0,.5],["A",.5,.5,0]
+];
+
+const structures = {
+  nacl:{
+    title:"NaCl型", sub:"岩塩型・1：1", formula:"NaCl", example:"NaCl, MgO",
+    cation:"Na⁺", anion:"Cl⁻", rC:.16, rA:.22, insideRC:.23, insideRA:.34, bond:0.535,
+    info:"NaCl型では，Cl⁻が立方体の頂点と面の中心，Na⁺が辺の中心と立方体の中心に配置される形で見ることができます。NaClは結晶全体の最小の個数比を表します。",
+    cubeAtoms:[...corners("A"), ...faceCenters("A"), ...edgeCenters("C"), ["C",.5,.5,.5]],
+    basis:[
+      ["A",0,0,0],["A",0,.5,.5],["A",.5,0,.5],["A",.5,.5,0],
+      ["C",.5,.5,.5],["C",.5,0,0],["C",0,.5,0],["C",0,0,.5]
+    ]
+  },
+  cscl:{
+    title:"CsCl型", sub:"1：1・体心型", formula:"CsCl", example:"CsCl",
+    cation:"Cs⁺", anion:"Cl⁻", rC:.24, rA:.22, insideRC:.34, insideRA:.33, bond:.905,
+    info:"CsCl型では，Cl⁻が立方体の8つの頂点，Cs⁺が立方体の中心に配置される形で見ることができます。",
+    cubeAtoms:[...corners("A"), ["C",.5,.5,.5]],
+    basis:[
+      ["A",0,0,0],
+      ["C",.5,.5,.5]
+    ]
+  },
+  caf2:{
+    title:"CaF₂型", sub:"蛍石型・1：2", formula:"CaF₂", example:"CaF₂",
+    cation:"Ca²⁺", anion:"F⁻", rC:.20, rA:.14, insideRC:.31, insideRA:.25, bond:.465,
+    info:"CaF₂型では，Ca²⁺が立方体の頂点と面の中心，F⁻が立方体内部の位置に配置される形で見ることができます。個数比はCa²⁺：F⁻＝1：2です。",
+    cubeAtoms:[
+      ...corners("C"), ...faceCenters("C"),
+      ["A",.25,.25,.25],["A",.25,.25,.75],["A",.25,.75,.25],["A",.75,.25,.25],
+      ["A",.75,.75,.25],["A",.75,.25,.75],["A",.25,.75,.75],["A",.75,.75,.75]
+    ],
+    basis:[
+      ["C",0,0,0],["C",0,.5,.5],["C",.5,0,.5],["C",.5,.5,0],
+      ["A",.25,.25,.25],["A",.25,.25,.75],["A",.25,.75,.25],["A",.75,.25,.25],
+      ["A",.75,.75,.25],["A",.75,.25,.75],["A",.25,.75,.75],["A",.75,.75,.75]
+    ]
+  },
+  zns:{
+    title:"ZnS型", sub:"閃亜鉛鉱型・1：1", formula:"ZnS", example:"ZnS",
+    cation:"Zn²⁺", anion:"S²⁻", rC:.15, rA:.22, insideRC:.23, insideRA:.35, bond:.465,
+    info:"ZnS型では，S²⁻が立方体の頂点と面の中心，Zn²⁺が立方体内部の4か所に配置される形で見ることができます。個数比は1：1です。",
+    cubeAtoms:[
+      ...corners("A"), ...faceCenters("A"),
+      ["C",.25,.25,.25],["C",.25,.75,.75],["C",.75,.25,.75],["C",.75,.75,.25]
+    ],
+    basis:[
+      ["A",0,0,0],["A",0,.5,.5],["A",.5,0,.5],["A",.5,.5,0],
+      ["C",.25,.25,.25],["C",.25,.75,.75],["C",.75,.25,.75],["C",.75,.75,.25]
+    ]
+  }
+};
+
+let S = structures.nacl;
+let mode = "cube";
+let zoom = 1;
+let yaw = 0.72, pitch = -0.52;
+let cam = {x:0.2,y:0.2,z:-2.2};
+let dragging=false, lastX=0,lastY=0;
+let auto=false;
+let autoSpeed=2;
+let keys={};
+let heldButtons={};
+
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+const $=id=>document.getElementById(id);
+
+function buildButtons(){
+  const box=$("structureButtons"); box.innerHTML="";
+  Object.entries(structures).forEach(([key,s])=>{
+    const b=document.createElement("button");
+    b.className="struct-btn"+(s===S?" active":"");
+    b.innerHTML=`<strong>${s.title}</strong><span>${s.formula}｜${s.sub}</span>`;
+    b.onclick=()=>{S=s; buildButtons(); resetView(); updateText();};
+    box.appendChild(b);
+  });
+}
+
+function resize(){
+  const r=canvas.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=Math.floor(r.width*dpr);
+  canvas.height=Math.floor(r.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function dedupeAtoms(atoms){
+  const m=new Map();
+  for(const a of atoms){
+    const key=`${a.t}:${Math.round(a.x*1000)},${Math.round(a.y*1000)},${Math.round(a.z*1000)}`;
+    if(!m.has(key)) m.set(key,a);
+  }
+  return [...m.values()];
+}
+
+function getAtoms(){
+  if(mode==="cube"){
+    const atoms = S.cubeAtoms.map(b=>({t:b[0], x:b[1]-.5, y:b[2]-.5, z:b[3]-.5}));
+    return dedupeAtoms(atoms);
+  }else{
+    const cx=Math.floor(cam.x), cy=Math.floor(cam.y), cz=Math.floor(cam.z);
+    const R=4;
+    const atoms=[];
+    for(let i=cx-R;i<=cx+R;i++){
+      for(let j=cy-R;j<=cy+R;j++){
+        for(let k=cz-R;k<=cz+R;k++){
+          for(const b of S.basis){
+            const x=i+b[1], y=j+b[2], z=k+b[3];
+            const dx=x-cam.x, dy=y-cam.y, dz=z-cam.z;
+            if(dx*dx+dy*dy+dz*dz<42){
+              atoms.push({t:b[0],x,y,z,cell:[i,j,k]});
+            }
+          }
+        }
+      }
+    }
+    return dedupeAtoms(atoms);
+  }
+}
+
+function color(a){return a.t==="C"?PLUS:MINUS}
+function label(a){return a.t==="C"?S.cation:S.anion}
+function radius(a){
+  if(mode==="inside") return a.t==="C" ? S.insideRC : S.insideRA;
+  return a.t==="C"?S.rC:S.rA;
+}
+
+function cameraTransform(p){
+  let x=p.x-cam.x, y=p.y-cam.y, z=p.z-cam.z;
+  const cy=Math.cos(-yaw), sy=Math.sin(-yaw);
+  let x1=x*cy + z*sy;
+  let z1=-x*sy + z*cy;
+  const cp=Math.cos(-pitch), sp=Math.sin(-pitch);
+  let y2=y*cp - z1*sp;
+  let z2=y*sp + z1*cp;
+  return {x:x1,y:y2,z:z2};
+}
+
+function orbitTransform(p){
+  const cy=Math.cos(yaw), sy=Math.sin(yaw);
+  const cp=Math.cos(pitch), sp=Math.sin(pitch);
+  let x=p.x, y=p.y, z=p.z;
+  let x1=x*cy+z*sy;
+  let z1=-x*sy+z*cy;
+  let y2=y*cp-z1*sp;
+  let z2=y*sp+z1*cp;
+  return {x:x1,y:y2,z:z2};
+}
+
+function project(p){
+  const rect=canvas.getBoundingClientRect();
+  const w=rect.width,h=rect.height;
+  let q;
+  if(mode==="inside"){
+    q=cameraTransform(p);
+    if(q.z<0.08) return null;
+    const f=460*zoom;
+    return {x:w/2 + q.x/q.z*f, y:h/2 - q.y/q.z*f, z:q.z, scale:1/q.z};
+  }else{
+    q=orbitTransform(p);
+    const dist=5.5;
+    const persp=dist/(dist-q.z);
+    const f=360*zoom;
+    return {x:w/2+q.x*f*persp, y:h/2+q.y*f*persp, z:q.z, scale:persp};
+  }
+}
+
+function drawSphere(p, r, c, text, alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  const g=ctx.createRadialGradient(p.x-r*.32,p.y-r*.38,r*.12,p.x,p.y,r);
+  g.addColorStop(0,"#fff");
+  g.addColorStop(.24,c);
+  g.addColorStop(1,shade(c,-35));
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle="rgba(15,23,42,.25)"; ctx.lineWidth=1.3; ctx.stroke();
+  if($("showLabels").checked && r>9){
+    ctx.shadowColor="rgba(0,0,0,.35)"; ctx.shadowBlur=3;
+    ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.font=`900 ${Math.max(9,Math.min(15,r*.55))}px system-ui`;
+    ctx.fillText(text,p.x,p.y);
+  }
+  ctx.restore();
+}
+
+function shade(hex,amt){
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));
+  return `rgb(${r},${g},${b})`;
+}
+
+function projectCameraPoint(q){
+  const rect=canvas.getBoundingClientRect();
+  const f=460*zoom;
+  return {
+    x:rect.width/2 + q.x/q.z*f,
+    y:rect.height/2 - q.y/q.z*f,
+    z:q.z
+  };
+}
+
+function drawLine(a,b,alpha,width=1.5){
+  const rect=canvas.getBoundingClientRect();
+
+  // 内部ビューでは，カメラに近い線分を近クリップ面で切る。
+  // これで「近づいたら線が消える」挙動を減らす。
+  if(mode==="inside"){
+    let qa = cameraTransform(a);
+    let qb = cameraTransform(b);
+    const near = 0.10;
+
+    if(qa.z < near && qb.z < near) return;
+
+    function clip(p1,p2){
+      if(p1.z >= near) return p1;
+      const t = (near - p1.z) / (p2.z - p1.z);
+      return {
+        x:p1.x + (p2.x-p1.x)*t,
+        y:p1.y + (p2.y-p1.y)*t,
+        z:near
+      };
+    }
+
+    const ca = clip(qa,qb);
+    const cb = clip(qb,qa);
+    const pa = projectCameraPoint(ca);
+    const pb = projectCameraPoint(cb);
+
+    if(pa.x<-400&&pb.x<-400) return;
+    if(pa.x>rect.width+400&&pb.x>rect.width+400) return;
+    if(pa.y<-400&&pb.y<-400) return;
+    if(pa.y>rect.height+400&&pb.y>rect.height+400) return;
+
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.strokeStyle=BOND;
+    ctx.lineWidth=width;
+    ctx.beginPath();
+    ctx.moveTo(pa.x,pa.y);
+    ctx.lineTo(pb.x,pb.y);
+    ctx.stroke();
+
+    // 奥行方向の線も見やすいよう，細い明色ハイライトを重ねる。
+    ctx.globalAlpha=Math.min(alpha+.14, .58);
+    ctx.strokeStyle="rgba(255,255,255,.50)";
+    ctx.lineWidth=Math.max(.7,width*.42);
+    ctx.beginPath();
+    ctx.moveTo(pa.x,pa.y);
+    ctx.lineTo(pb.x,pb.y);
+    ctx.stroke();
+
+    ctx.restore();
+    return;
+  }
+
+  const pa=project(a), pb=project(b);
+  if(!pa||!pb) return;
+  if(pa.x<-250&&pb.x<-250) return;
+  if(pa.x>rect.width+250&&pb.x>rect.width+250) return;
+  if(pa.y<-250&&pb.y<-250) return;
+  if(pa.y>rect.height+250&&pb.y>rect.height+250) return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.strokeStyle=BOND;
+  ctx.lineWidth=width;
+  ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
+  ctx.restore();
+}
+
+function coordinationLimit(atomType){
+  // 近接する正負イオンだけを線で結ぶ。構造ごとの最近接数を目安にする。
+  if(S.title==="NaCl型") return 6;
+  if(S.title==="CsCl型") return 8;
+  if(S.title==="CaF₂型") return atomType==="C" ? 8 : 4;
+  if(S.title==="ZnS型") return 4;
+  return 6;
+}
+
+function findBonds(atoms){
+  const max=S.bond;
+  const max2=max*max;
+  const pairMap=new Map();
+
+  // 各イオンから見て，近い反対符号のイオンを優先的に結ぶ。
+  // これにより，奥行方向のつながりや内部ビューでの線の欠落を減らす。
+  for(let i=0;i<atoms.length;i++){
+    const a=atoms[i];
+    const candidates=[];
+    for(let j=0;j<atoms.length;j++){
+      if(i===j) continue;
+      const b=atoms[j];
+      if(a.t===b.t) continue;
+      const dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z;
+      const d2=dx*dx+dy*dy+dz*dz;
+      if(d2<=max2 + 1e-6 && d2>0.005){
+        candidates.push([j,b,d2]);
+      }
+    }
+    candidates.sort((u,v)=>u[2]-v[2]);
+    const limit=coordinationLimit(a.t);
+    for(const [j,b,d2] of candidates.slice(0,limit)){
+      const key=i<j ? `${i}-${j}` : `${j}-${i}`;
+      if(!pairMap.has(key)) pairMap.set(key,[a,b,d2]);
+    }
+  }
+  return [...pairMap.values()];
+}
+
+function drawBox(){
+  if(!$("showBox").checked || mode!=="cube") return;
+  const pts=[
+    [-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5],
+    [-.5,-.5,.5],[.5,-.5,.5],[.5,.5,.5],[-.5,.5,.5]
+  ].map(([x,y,z])=>project({x,y,z}));
+  const edges=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  ctx.save();
+  const faces = [
+    [0,1,2,3],[4,5,6,7],[0,1,5,4],[2,3,7,6],[1,2,6,5],[0,3,7,4]
+  ];
+  ctx.fillStyle="rgba(49,90,168,.045)";
+  for(const f of faces){
+    if(f.some(i=>!pts[i])) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[f[0]].x,pts[f[0]].y);
+    for(let n=1;n<f.length;n++) ctx.lineTo(pts[f[n]].x,pts[f[n]].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.strokeStyle="rgba(30,41,59,.86)";
+  ctx.lineWidth=3;
+  for(const [i,j] of edges){
+    if(!pts[i]||!pts[j]) continue;
+    ctx.beginPath();ctx.moveTo(pts[i].x,pts[i].y);ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();
+  }
+  ctx.fillStyle="rgba(30,41,59,.76)";
+  for(const p of pts){
+    if(!p) continue;
+    ctx.beginPath(); ctx.arc(p.x,p.y,3.2,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function draw(){
+  const rect=canvas.getBoundingClientRect();
+  ctx.clearRect(0,0,rect.width,rect.height);
+  const atoms=getAtoms();
+  const bonds=$("showBonds").checked?findBonds(atoms):[];
+
+  for(const [a,b] of bonds){
+    let alpha= mode==="cube" ? .34 : .32;
+    if(mode==="inside"){
+      const da=(a.x-cam.x)**2+(a.y-cam.y)**2+(a.z-cam.z)**2;
+      const db=(b.x-cam.x)**2+(b.y-cam.y)**2+(b.z-cam.z)**2;
+      const d=Math.sqrt(Math.min(da,db));
+      alpha=$("fadeFar").checked?Math.max(.05,.48-d*.055):.35;
+    }
+    drawLine(a,b,alpha, mode==="inside"?2.2:1.7);
+  }
+  drawBox();
+
+  const projected=[];
+  for(const a of atoms){
+    const p=project(a);
+    if(!p) continue;
+    if(p.x<-120||p.x>rect.width+120||p.y<-120||p.y>rect.height+120) continue;
+    let rr;
+    if(mode==="inside"){
+      rr=Math.max(3, radius(a)*72*zoom*p.scale);
+    }else{
+      rr=Math.max(8, radius(a)*66*zoom*p.scale);
+    }
+    let alpha=1;
+    if(mode==="inside" && $("fadeFar").checked){
+      alpha=Math.max(.12, Math.min(1, 1 - (p.z-1)*.08));
+    }
+    projected.push({a,p,rr,alpha});
+  }
+  projected.sort((u,v)=>(mode==="inside"?v.p.z-u.p.z:u.p.z-v.p.z));
+  for(const item of projected){
+    drawSphere(item.p,item.rr,color(item.a),label(item.a),item.alpha);
+  }
+
+  $("statCount").textContent=`${atoms.length} 個`;
+}
+
+function updateText(){
+  $("cationPill").textContent=`陽イオン：${S.cation}`;
+  $("anionPill").textContent=`陰イオン：${S.anion}`;
+  $("modePill").textContent=mode==="cube"?"立方体表示":"結晶内部";
+  $("bondPill").textContent=$("showBonds").checked?"補助線ON":"補助線OFF";
+  $("info").innerHTML=`<strong>${S.title}（${S.formula}）</strong><br>${S.info}`;
+  $("statType").textContent=S.title;
+  $("statExample").textContent=S.example;
+  $("statFormula").textContent=S.formula;
+  $("hint").innerHTML = mode==="cube"
+    ? "立方体表示です。立方体の中で，陽イオンと陰イオンがどの位置にあるかを観察できます。"
+    : "結晶内部モードです。カメラが結晶の中に入っています。進んでも同じ並びが続くように表示しています。";
+  $("autoSpeedControl").style.display = mode==="inside" ? "grid" : "none";
+}
+
+function setMode(m){
+  mode=m;
+  $("cubeMode").classList.toggle("active",m==="cube");
+  $("insideMode").classList.toggle("active",m==="inside");
+  if(mode==="cube") auto=false;
+  $("autoForward").classList.toggle("active",auto);
+  resetView();
+  updateText();
+}
+
+function resetView(){
+  if(mode==="cube"){
+    yaw=.72; pitch=-0.52; cam={x:0,y:0,z:-2.2}; zoom=1;
+    $("showBonds").checked = true;
+  }else{
+    yaw=0; pitch=0; cam={x:.5,y:.5,z:-2.3}; zoom=1;
+    $("showBonds").checked = true;
+  }
+  $("zoomRange").value=100; $("zoomText").textContent="100%";
+}
+
+function movementSpeed(){
+  return 0.015 + autoSpeed * 0.006;
+}
+
+function move(dir, step){
+  // 前後移動は「現在見ている向き」を基準にする。
+  // 上を向けば上方向へ，下を向けば下方向へ進む。
+  const forward = {
+    x: Math.sin(yaw) * Math.cos(pitch),
+    // 画面上では，上を向くほど pitch が負になるため，符号を反転する。
+    y: -Math.sin(pitch),
+    z: Math.cos(yaw) * Math.cos(pitch)
+  };
+  // 左右移動は視線に対する横方向。画面操作として安定させるため水平面上で扱う。
+  const right = {
+    x: Math.cos(yaw),
+    y: 0,
+    z: -Math.sin(yaw)
+  };
+
+  if(dir==="forward"){
+    cam.x += forward.x * step;
+    cam.y += forward.y * step;
+    cam.z += forward.z * step;
+  }
+  if(dir==="back"){
+    cam.x -= forward.x * step;
+    cam.y -= forward.y * step;
+    cam.z -= forward.z * step;
+  }
+  if(dir==="right"){
+    cam.x += right.x * step;
+    cam.z += right.z * step;
+  }
+  if(dir==="left"){
+    cam.x -= right.x * step;
+    cam.z -= right.z * step;
+  }
+}
+
+canvas.addEventListener("mousedown",e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;});
+window.addEventListener("mouseup",()=>dragging=false);
+window.addEventListener("mousemove",e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX,dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+  yaw += dx*.006;
+  pitch += dy*.006;
+  pitch=Math.max(-1.35,Math.min(1.35,pitch));
+});
+canvas.addEventListener("wheel",e=>{
+  e.preventDefault();
+  zoom*=e.deltaY<0?1.08:.92;
+  zoom=Math.max(.6,Math.min(1.8,zoom));
+  $("zoomRange").value=Math.round(zoom*100);
+  $("zoomText").textContent=Math.round(zoom*100)+"%";
+},{passive:false});
+
+window.addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=true;});
+window.addEventListener("keyup",e=>{keys[e.key.toLowerCase()]=false;});
+
+function setHeld(button, val){
+  const dir=button.dataset.move;
+  heldButtons[dir]=val;
+  button.classList.toggle("pressed", val);
+  if(val && mode!=="inside") setMode("inside");
+}
+document.querySelectorAll("[data-move]").forEach(b=>{
+  b.addEventListener("mousedown",()=>setHeld(b,true));
+  b.addEventListener("mouseup",()=>setHeld(b,false));
+  b.addEventListener("mouseleave",()=>setHeld(b,false));
+  b.addEventListener("touchstart",(e)=>{e.preventDefault(); setHeld(b,true);},{passive:false});
+  b.addEventListener("touchend",(e)=>{e.preventDefault(); setHeld(b,false);},{passive:false});
+  b.addEventListener("touchcancel",()=>setHeld(b,false));
+});
+
+$("cubeMode").onclick=()=>setMode("cube");
+$("insideMode").onclick=()=>setMode("inside");
+$("resetView").onclick=()=>{resetView();};
+$("autoForward").onclick=()=>{ if(mode!=="inside") setMode("inside"); auto=!auto; $("autoForward").classList.toggle("active",auto); };
+$("zoomRange").oninput=e=>{zoom=Number(e.target.value)/100;$("zoomText").textContent=Math.round(zoom*100)+"%";};
+$("speedRange").oninput=e=>{
+  autoSpeed=Number(e.target.value);
+  const labels=["かなりゆっくり","ゆっくり","標準","速め","かなり速め"];
+  $("speedText").textContent=labels[autoSpeed-1];
+};
+["showBonds","showBox","showLabels","fadeFar"].forEach(id=>$(id).onchange=()=>updateText());
+
+function loop(){
+  if(mode==="inside"){
+    const sp = movementSpeed();
+    if(keys["w"]||keys["arrowup"]||heldButtons.forward) move("forward",sp);
+    if(keys["s"]||keys["arrowdown"]||heldButtons.back) move("back",sp);
+    if(keys["a"]||keys["arrowleft"]||heldButtons.left) move("left",sp);
+    if(keys["d"]||keys["arrowright"]||heldButtons.right) move("right",sp);
+    if(auto) move("forward",0.007 + autoSpeed*0.004);
+  }
+  draw(); updateText();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener("resize",resize);
+buildButtons();
+resetView();
+resize();
+updateText();
+loop();
+</script>
+</body>
+</html>
